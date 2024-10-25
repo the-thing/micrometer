@@ -19,6 +19,7 @@ import io.micrometer.common.lang.NonNullApi;
 import io.micrometer.common.lang.NonNullFields;
 import io.micrometer.common.lang.Nullable;
 import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.instrument.binder.MeterBinder;
 
 import java.lang.ref.WeakReference;
@@ -99,6 +100,17 @@ public abstract class CacheMeterBinder<C> implements MeterBinder {
             }).tags(tags).description("The number of times the cache was evicted.").register(registry);
         }
 
+        // TODO remove
+        System.out.println("ml_test, utilization " + utilization());
+
+        if (utilization() != null) {
+            Gauge.builder("cache.utilization", cache, c -> {
+                Double utilization = utilization();
+                return utilization == null ? 0.0 : utilization;
+            }).tags(tags).description("The utilization of this cache. This may be an approximation, depending on the type of cache.")
+                .baseUnit(BaseUnits.PERCENT).register(registry);
+        }
+
         bindImplementationSpecificMetrics(registry);
     }
 
@@ -145,6 +157,8 @@ public abstract class CacheMeterBinder<C> implements MeterBinder {
      * @return Total number of entries added to the cache. Monotonically increasing count.
      */
     protected abstract long putCount();
+
+    protected abstract Double utilization();
 
     /**
      * Bind detailed metrics that are particular to the cache implementation, e.g. load

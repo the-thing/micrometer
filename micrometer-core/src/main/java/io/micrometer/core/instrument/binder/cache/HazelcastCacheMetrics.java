@@ -132,6 +132,11 @@ public class HazelcastCacheMetrics extends CacheMeterBinder<Object> {
     }
 
     @Override
+    protected Double utilization() {
+        return null;
+    }
+
+    @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
         Gauge
             .builder("cache.entries", cache,

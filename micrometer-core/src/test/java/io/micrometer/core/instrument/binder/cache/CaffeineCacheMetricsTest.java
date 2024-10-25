@@ -18,8 +18,10 @@ package io.micrometer.core.instrument.binder.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.Policy;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.TimeGauge;
@@ -40,7 +42,7 @@ import static org.assertj.core.api.Assertions.*;
 class CaffeineCacheMetricsTest extends AbstractCacheMetricsTest {
 
     // tag::setup[]
-    LoadingCache<String, String> cache = Caffeine.newBuilder().recordStats().build(key -> "");
+    LoadingCache<String, String> cache = Caffeine.newBuilder().recordStats().maximumSize(1024 * 1024).build(key -> "");
 
     CaffeineCacheMetrics<String, String, Cache<String, String>> metrics = new CaffeineCacheMetrics<>(cache, "testCache",
             expectedTag);
@@ -74,6 +76,8 @@ class CaffeineCacheMetricsTest extends AbstractCacheMetricsTest {
 
         FunctionCounter failedLoad = fetch(registry, "cache.load", Tags.of("result", "failure")).functionCounter();
         assertThat(failedLoad.count()).isEqualTo(stats.loadFailureCount());
+
+        // TODO should this go here
     }
 
     @Test
@@ -151,4 +155,21 @@ class CaffeineCacheMetricsTest extends AbstractCacheMetricsTest {
         assertThat(metrics.putCount()).isEqualTo(cache.stats().loadCount());
     }
 
+    @Test
+    void returnUtilization() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        metrics.bindTo(registry);
+
+        Policy.Eviction<String, String> eviction = cache.policy().eviction().get();
+
+        Gauge utilization = fetch(registry, "cache.utilization").tags(expectedTag).gauge();
+        assertThat(utilization.value()).isEqualTo((100.0 * cache.estimatedSize()) / eviction.getMaximum());
+        assertThat(utilization.value()).isZero();
+
+        cache.put("a", "b");
+        cache.put("c", "d");
+
+        assertThat(utilization.value()).isEqualTo((100.0 * cache.estimatedSize()) / eviction.getMaximum());
+        assertThat(utilization.value()).isGreaterThan(0.0).isLessThanOrEqualTo(1.0);
+    }
 }

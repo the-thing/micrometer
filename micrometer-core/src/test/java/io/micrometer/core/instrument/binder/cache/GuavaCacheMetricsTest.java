@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GuavaCacheMetricsTest extends AbstractCacheMetricsTest {
 
     // tag::setup[]
-    LoadingCache<String, String> cache = CacheBuilder.newBuilder().recordStats().build(new CacheLoader<>() {
+    LoadingCache<String, String> cache = CacheBuilder.newBuilder().maximumWeight(10).weigher((k, v) -> 1).recordStats().build(new CacheLoader<>() {
         public String load(String key) {
             return "";
         }
@@ -84,6 +84,22 @@ class GuavaCacheMetricsTest extends AbstractCacheMetricsTest {
 
         FunctionCounter failedLoad = fetch(registry, "cache.load", Tags.of("result", "failure")).functionCounter();
         assertThat(failedLoad.count()).isEqualTo(stats.loadExceptionCount());
+    }
+
+    @Test
+    public void foo() {
+
+
+        for (int i = 0; i < 10; i++) {
+            cache.put(String.valueOf(i), "bar");
+        }
+
+        cache.put("asdf", "sdf");
+
+        MeterRegistry registry = new SimpleMeterRegistry();
+        metrics.bindTo(registry);
+
+
     }
 
     @Test

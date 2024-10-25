@@ -17,12 +17,17 @@ package io.micrometer.core.instrument.binder.cache;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.ForwardingCache;
 import com.google.common.cache.LoadingCache;
 import io.micrometer.common.lang.NonNullApi;
 import io.micrometer.common.lang.NonNullFields;
 import io.micrometer.common.lang.Nullable;
 import io.micrometer.core.instrument.*;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.ToLongFunction;
@@ -82,7 +87,7 @@ public class GuavaCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBi
 
     @Override
     protected Long size() {
-        return getOrDefault(Cache::size, null);
+        return getOrDefault((Function<C, Long>) Cache::size, null);
     }
 
     @Override
@@ -92,17 +97,136 @@ public class GuavaCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBi
 
     @Override
     protected Long missCount() {
-        return getOrDefault(c -> c.stats().missCount(), null);
+        return getOrDefault((Function<C, Long>) c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        return getOrDefault(c -> c.stats().evictionCount(), null);
+        return getOrDefault((Function<C, Long>) c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
         return getOrDefault(c -> c.stats().loadCount(), 0L);
+    }
+
+    @Override
+    protected Double utilization() {
+        Cache<K, V> cache = getCache();
+
+        System.out.println("ml_test, class" + cache.getClass());
+
+        if (cache instanceof ForwardingCache) {
+
+        } else if (cache instanceof LoadingCache) {
+
+
+            getLocalManualCache(cache);
+
+        }
+
+//        CacheStats stats = c.stats();
+//
+//        try {
+//            Field localCacheField = c.getClass().getDeclaredField("localCache");
+//            localCacheField.setAccessible(true);
+//
+//            Object localCache = localCacheField.get(c);
+//
+//            // localCache.getClass().getde
+//
+//        } catch (NoSuchFieldException | IllegalAccessException e) {
+//            log.error("ml_test", e);
+//        }
+
+        return null;
+    }
+
+    private Object getLocalManualCache(Cache<K, V> cache) {
+
+        if (cache instanceof ForwardingCache) {
+
+        } else if (cache instanceof LoadingCache) {
+            Class<?> localManualCacheClass = findSuperClass(cache,"com.google.common.cache.LocalCache$LocalManualCache");
+
+            if (localManualCacheClass != null) {
+                try {
+                    Field localCacheField = localManualCacheClass.getDeclaredField("localCache");
+                    localCacheField.setAccessible(true);
+
+                    Object localCache = localCacheField.get(cache);
+
+                    Field segmentsField = localCache.getClass().getDeclaredField("segments");
+                    segmentsField.setAccessible(true);
+
+                    Field maxWeightField = localCache.getClass().getDeclaredField("maxWeight");
+                    maxWeightField.setAccessible(true);
+                    long maxWeight = (long) maxWeightField.get(localCache);
+
+                    Object segments = segmentsField.get(localCache);
+                    int length = Array.getLength(segments);
+
+                    long sumTotalWeight = 0L;
+                    long sumMaxWeight = length * maxWeight;
+
+                    for (int i = 0; i < length; i++) {
+                        Object segment = Array.get(segments, i);
+
+                        // TODO optimize and move out
+                        Method lockMethod = segment.getClass().getMethod("lock");
+                        Method unlockMethod = segment.getClass().getMethod("unlock");
+
+                        lockMethod.invoke(segment);
+
+                        try {
+                            Field totalWeightField = segment.getClass().getDeclaredField("totalWeight");
+                            totalWeightField.setAccessible(true);
+
+                            long totalWeight = (long) totalWeightField.get(segment);
+                            sumTotalWeight += totalWeight;
+                        } finally {
+                            unlockMethod.invoke(segment);
+                        }
+                    }
+
+                    System.out.println("ml_test, sumTotalWeight " + sumTotalWeight + ", sumMaxWeight = " + sumMaxWeight);
+
+                } catch (NoSuchFieldException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+                    e.printStackTrace();
+                    return null;
+                }
+            }
+
+
+//
+//            if (localManualCache.isPresent()) {
+//                try {
+//                    localManualCache.get().getDeclaredField("");
+//                } catch (NoSuchFieldException e) {
+//                    return Optional.empty();
+//                }
+//            }
+
+//            System.out.println("ml_test, " + localManualCache);
+
+        }
+
+        return null;
+    }
+
+    @Nullable
+    private Class<?> findSuperClass(Cache<K, V> cache, String className) {
+        Class<?> superClass = cache.getClass().getSuperclass();
+
+        while (superClass != Object.class) {
+            if (className.equals(superClass.getName())) {
+                return superClass;
+            }
+
+            superClass = superClass.getSuperclass();
+        }
+
+        return null;
     }
 
     @Override
@@ -130,7 +254,7 @@ public class GuavaCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBi
     }
 
     @Nullable
-    private Long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable Long defaultValue) {
+    private Long getOrDefault(Function<C, Long> function, @Nullable Long defaultValue) {
         C ref = getCache();
         if (ref != null) {
             return function.apply(ref);
@@ -139,7 +263,7 @@ public class GuavaCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBi
         return defaultValue;
     }
 
-    private long getOrDefault(ToLongFunction<Cache<?, ?>> function, long defaultValue) {
+    private long getOrDefault(ToLongFunction<C> function, long defaultValue) {
         C ref = getCache();
         if (ref != null) {
             return function.applyAsLong(ref);
@@ -148,4 +272,13 @@ public class GuavaCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBi
         return defaultValue;
     }
 
+    @Nullable
+    private Double getOrDefault(Function<C, Double> function, @Nullable Double defaultValue) {
+        C cache = getCache();
+        if (cache != null) {
+            return function.apply(cache);
+        }
+
+        return defaultValue;
+    }
 }

@@ -102,6 +102,12 @@ public class EhCache2Metrics extends CacheMeterBinder<Ehcache> {
     }
 
     @Override
+    protected Double utilization() {
+        // TODO
+        return null;
+    }
+
+    @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
         StatisticsGateway stats = getStats();
         Gauge.builder("cache.remoteSize", stats, StatisticsGateway::getRemoteSize)

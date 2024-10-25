@@ -150,7 +150,7 @@ public class CaffeineCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMete
 
     @Override
     protected Long size() {
-        return getOrDefault(Cache::estimatedSize, null);
+        return getOrDefault((Function<C, Long>) Cache::estimatedSize, null);
     }
 
     @Override
@@ -160,18 +160,46 @@ public class CaffeineCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMete
 
     @Override
     protected Long missCount() {
-        return getOrDefault(c -> c.stats().missCount(), null);
+        return getOrDefault((Function<C, Long>) c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        return getOrDefault(c -> c.stats().evictionCount(), null);
+        return getOrDefault((Function<C, Long>) c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
         return getOrDefault(c -> c.stats().loadCount(), 0L);
     }
+
+    @Override
+    protected Double utilization() {
+        return getOrDefault((Function<C, Double>) c -> c.policy().eviction().map(ev -> {
+            long size;
+            long capacity;
+
+            try {
+                if (ev.isWeighted()) {
+                    size = ev.weightedSize().getAsLong();
+                } else {
+                    size = c.estimatedSize();
+                }
+
+                capacity = ev.getMaximum();
+            } catch (UnsupportedOperationException e) {
+                // only bounded caffeine cache supports maximum and size, it can fail even if stats recording is enabled
+                return null;
+            }
+
+            if (capacity == 0L) {
+                return null;
+            }
+
+            return (100.0 * size) / capacity;
+        }).orElse(null), null);
+    }
+
 
     @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
@@ -233,4 +261,17 @@ public class CaffeineCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMete
         return defaultValue;
     }
 
+    @Nullable
+    private Double getOrDefault(Function<C, Double> function, @Nullable Double defaultValue) {
+        C cache = getCache();
+        if (cache != null) {
+            if (!cache.policy().isRecordingStats()) {
+                return null;
+            }
+
+            return function.apply(cache);
+        }
+
+        return defaultValue;
+    }
 }

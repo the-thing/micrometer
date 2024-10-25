@@ -128,6 +128,11 @@ public class JCacheMetrics<K, V, C extends Cache<K, V>> extends CacheMeterBinder
     }
 
     @Override
+    protected Double utilization() {
+        return null;
+    }
+
+    @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
         if (objectName != null) {
             Gauge.builder("cache.removals", objectName, objectName -> lookupStatistic("CacheRemovals"))
