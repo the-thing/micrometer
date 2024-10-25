@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.sf.ehcache.Cache;
 import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
 import net.sf.ehcache.statistics.StatisticsGateway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -121,6 +122,23 @@ class EhCache2MetricsTest extends AbstractCacheMetricsTest {
     }
 
     @Test
+    public void foo() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        EhCache2Metrics.monitor(registry, cache, expectedTag);
+
+        for (int i = 0; i < 100; i++) {
+            cache.put(new Element(Integer.valueOf(i), "sdf"));
+        }
+
+        Gauge utilization = fetch(registry, "cache.utilization").tags(expectedTag).gauge();
+        System.out.println("test util = " + utilization.value());
+
+        cache.evictExpiredElements();
+
+        System.out.println("test util = " + utilization.value());
+    }
+
+    @Test
     void constructInstanceViaStaticMethodMonitor() {
         // tag::monitor[]
         MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -163,8 +181,21 @@ class EhCache2MetricsTest extends AbstractCacheMetricsTest {
     @BeforeAll
     static void setup() {
         cacheManager = CacheManager.newInstance();
+
         cacheManager.addCache("testCache");
         cache = spy(cacheManager.getCache("testCache"));
+
+        System.out.println("eviction policy = " + cache.getMemoryStoreEvictionPolicy());
+
+        //  cache.getCacheConfiguration().setMaxEntriesLocalHeap(10);
+//        cache.getCacheConfiguration().setMaxEntriesInCache(20);
+//        cache.getCacheConfiguration().setMaxEntriesLocalHeap(20);
+//        cache.getCacheConfiguration().setMaxBytesLocalHeap(1024L)
+        cache.getCacheConfiguration().setMaxEntriesInCache(10);
+
+
+//        cache.getCacheConfiguration().setMaxBytesLocalHeap(1024L);
+
         StatisticsGateway stats = mock(StatisticsGateway.class);
         // generate non-negative random value to address false-positives
         int valueBound = 100000;

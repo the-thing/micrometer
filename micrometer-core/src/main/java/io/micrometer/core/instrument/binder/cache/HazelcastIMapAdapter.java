@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument.binder.cache;
 
+import com.hazelcast.config.MapConfig;
 import io.micrometer.common.lang.Nullable;
 import io.micrometer.common.util.internal.logging.InternalLogger;
 import io.micrometer.common.util.internal.logging.InternalLoggerFactory;
@@ -49,9 +50,12 @@ class HazelcastIMapAdapter {
 
     private static final MethodHandle GET_LOCAL_MAP_STATS;
 
+    private static final MethodHandle GET_MAP_CONFIG;
+
     static {
         GET_NAME = resolveIMapMethod("getName", methodType(String.class));
         GET_LOCAL_MAP_STATS = resolveIMapMethod("getLocalMapStats", methodType(CLASS_LOCAL_MAP));
+        GET_MAP_CONFIG = resolveIMapMethod("getMapConfig", methodType(MapConfig.class));
     }
 
     private final WeakReference<Object> cache;

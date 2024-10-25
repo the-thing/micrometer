@@ -133,6 +133,17 @@ public class HazelcastCacheMetrics extends CacheMeterBinder<Object> {
 
     @Override
     protected Double utilization() {
+
+        cache
+
+        LocalMapStats localMapStats = cache.getLocalMapStats();
+
+        localMapStats.getOwnedEntryCount();
+
+        HazelcastIMapAdapter.NearCacheStats nearCacheStats = localMapStats.getNearCacheStats();
+
+        localMapStats.getOwnedEntryMemoryCost()
+
         return null;
     }
 

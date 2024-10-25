@@ -20,7 +20,10 @@ import io.micrometer.common.lang.NonNullFields;
 import io.micrometer.common.lang.Nullable;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.binder.BaseUnits;
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
 import net.sf.ehcache.Ehcache;
+import net.sf.ehcache.config.CacheConfiguration;
 import net.sf.ehcache.statistics.StatisticsGateway;
 
 import java.util.function.Function;
@@ -103,7 +106,18 @@ public class EhCache2Metrics extends CacheMeterBinder<Ehcache> {
 
     @Override
     protected Double utilization() {
-        // TODO
+        Ehcache cache = getCache();
+        CacheConfiguration cacheConfiguration = cache.getCacheConfiguration();
+
+        long maxEntriesInCache = cacheConfiguration.getMaxEntriesInCache();
+        System.out.println("maxEntriesInCache = " + maxEntriesInCache);
+
+        if (maxEntriesInCache != CacheConfiguration.DEFAULT_MAX_ENTRIES_IN_CACHE) {
+            System.out.println("size = " + cache.getSize());
+            System.out.println("maxEntriesInCache = " + maxEntriesInCache);
+            return (100.0 * cache.getSize()) / maxEntriesInCache;
+        }
+
         return null;
     }
 
